@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartKB · AI 智能知识库问答系统</title>
+<script>
+/* 首帧前应用主题, 避免闪白/闪黑: localStorage 优先, 其次跟随系统 */
+(function () {
+  var saved = null;
+  try { saved = localStorage.getItem('skb-theme'); } catch (e) { /* ignore */ }
+  var theme = saved === 'light' || saved === 'dark'
+    ? saved
+    : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  document.documentElement.dataset.theme = theme;
+})();
+</script>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+
+<!-- ===== 登录/注册 ===== -->
+<div id="loginView" class="login-wrap">
+  <button id="themeToggle" class="theme-fab" title="切换深色/浅色主题">🌓</button>
+  <div class="login-card">
+    <div class="login-logo">🧠 SmartKB</div>
+    <div class="login-sub">AI 智能知识库问答系统 · RAG 检索增强</div>
+    <input id="loginUsername" placeholder="用户名 (演示: demo)" autocomplete="username">
+    <input id="loginPassword" type="password" placeholder="密码 (演示: 123456)" autocomplete="current-password">
+    <input id="loginNickname" class="hidden" placeholder="昵称 (可选)">
+    <button id="loginBtn" class="btn primary block">登 录</button>
+    <div class="login-switch">
+      <span id="loginSwitchText">没有账号?</span>
+      <a id="loginSwitchBtn">去注册</a>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 主界面 ===== -->
+<div id="appView" class="app hidden">
+  <aside class="sidebar">
+    <div class="logo">🧠 SmartKB</div>
+    <nav id="nav">
+      <button class="nav-item active" data-page="chat">💬 智能问答</button>
+      <button class="nav-item" data-page="kb">📚 知识库</button>
+      <button class="nav-item" data-page="doc">📄 文档管理</button>
+      <button class="nav-item" data-page="stats">📊 用量统计</button>
+    </nav>
+    <div class="side-links">
+      <a href="/swagger-ui.html" target="_blank">接口文档</a>
+      <a href="/h2-console" target="_blank">数据库</a>
+      <a id="themeToggleSide" title="切换深色/浅色主题">🌓 主题</a>
+    </div>
+    <div class="side-foot">
+      <span id="nickname"></span>
+      <a id="logoutBtn">退出</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- 问答 -->
+    <section id="page-chat" class="page">
+      <div class="chat-layout">
+        <div class="conv-panel">
+          <button id="newConvBtn" class="btn primary block">＋ 新对话</button>
+          <div id="convList" class="conv-list"></div>
+        </div>
+        <div class="chat-panel">
+          <div id="chatHead" class="chat-head">选择或新建一个对话开始提问</div>
+          <div id="msgList" class="msg-list">
+            <div class="chat-empty">
+              <div class="chat-empty-icon">💬</div>
+              <p>基于知识库文档回答, 每句话可溯源到原文片段</p>
+              <p class="dim">试试: "线程池的拒绝策略有哪些?" 或 "OOM 怎么排查?"</p>
+            </div>
+          </div>
+          <div class="chat-input">
+            <textarea id="questionInput" rows="2" placeholder="输入问题, Enter 发送, Shift+Enter 换行"></textarea>
+            <button id="sendBtn" class="btn primary">发送</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 知识库 -->
+    <section id="page-kb" class="page hidden">
+      <div class="page-head">
+        <h2>知识库</h2>
+        <button id="createKbBtn" class="btn primary">＋ 新建知识库</button>
+      </div>
+      <div id="kbGrid" class="kb-grid"></div>
+    </section>
+
+    <!-- 文档 -->
+    <section id="page-doc" class="page hidden">
+      <div class="page-head">
+        <h2>文档管理</h2>
+        <div class="row">
+          <select id="docKbSelect" class="select"></select>
+          <button id="uploadBtn" class="btn primary">⬆ 上传文档</button>
+          <input id="fileInput" type="file" class="hidden"
+                 accept=".pdf,.doc,.docx,.ppt,.pptx,.md,.markdown,.txt,.html,.htm">
+        </div>
+      </div>
+      <div class="search-box">
+        <input id="searchInput" placeholder="检索测试: 输入查询词, 查看向量/关键词/RRF/重排全链路得分">
+        <button id="searchBtn" class="btn">🔍 检索</button>
+      </div>
+      <div id="searchResult"></div>
+      <table class="table">
+        <thead><tr>
+          <th>文档</th><th>类型</th><th>大小</th><th>状态</th><th>分块</th><th>字符</th><th>上传时间</th><th>操作</th>
+        </tr></thead>
+        <tbody id="docTbody"></tbody>
+      </table>
+    </section>
+
+    <!-- 统计 -->
+    <section id="page-stats" class="page hidden">
+      <div class="page-head"><h2>用量统计</h2><button id="statsRefreshBtn" class="btn">刷新</button></div>
+      <div id="statCards" class="stat-cards"></div>
+      <h3 class="section-title">最近调用</h3>
+      <table class="table">
+        <thead><tr><th>时间</th><th>类型</th><th>模型</th><th>输入token</th><th>输出token</th><th>耗时</th><th>状态</th><th>备注</th></tr></thead>
+        <tbody id="statsTbody"></tbody>
+      </table>
+    </section>
+  </main>
+</div>
+
+<!-- 通用弹窗 -->
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head"><span id="modalTitle"></span><a id="modalClose">✕</a></div>
+    <div id="modalBody" class="modal-body"></div>
+    <div id="modalFoot" class="modal-foot"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

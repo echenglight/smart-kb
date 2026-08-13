@@ -1,0 +1,69 @@
+server:
+  port: 8081          # AgentFlow 占用 8080, 本项目用 8081, 两个项目可同时启动
+
+spring:
+  application:
+    name: smart-kb
+
+  # ===== 数据库: 开发环境用 H2 内嵌库(MySQL 兼容模式), 零安装 =====
+  # 生产切 MySQL: 启动加 --spring.profiles.active=prod (见 application-prod.yml)
+  datasource:
+    url: jdbc:h2:file:./data/smartkb;MODE=MySQL;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: always            # 启动时执行 schema.sql 建表(IF NOT EXISTS, 幂等)
+  h2:
+    console:
+      enabled: true           # http://localhost:8081/h2-console 可视化看库
+      path: /h2-console
+
+  servlet:
+    multipart:
+      max-file-size: 30MB
+      max-request-size: 30MB
+
+  # ===== 大模型接入: 默认 DeepSeek OpenAI 兼容端点 =====
+  # 启动前设置环境变量 AI_API_KEY; 不设置也能启动, 检索自动降级为纯关键词模式
+  ai:
+    openai:
+      api-key: ${AI_API_KEY:sk-placeholder-set-your-key}
+      base-url: ${AI_BASE_URL:https://api.deepseek.com}
+      chat:
+        options:
+          model: ${AI_CHAT_MODEL:deepseek-v4-flash}
+          temperature: 0.3    # 知识库问答要求忠实原文, 温度调低减少发挥
+      embedding:
+        options:
+          model: text-embedding-v3
+          dimensions: 1024
+
+smartkb:
+  ai:
+    # DeepSeek 官方 API 不提供文本向量模型；关闭后使用关键词检索，聊天仍可正常生成。
+    embedding-enabled: ${AI_EMBEDDING_ENABLED:false}
+
+# ===== RAG 流水线参数(核心面试点: 每个参数为什么这么定, 见 docs) =====
+rag:
+  vector-top-k: 8         # 向量召回条数
+  keyword-top-k: 8        # 关键词召回条数
+  fused-top-k: 6          # RRF 融合后保留条数
+  final-top-k: 4          # 重排后最终进入 prompt 的条数
+  rrf-k: 60               # RRF 平滑常数(论文默认 60)
+  min-score: 0.35         # 向量相似度下限, 低于此认为不相关
+  query-rewrite-enabled: true   # 多轮对话查询改写
+  rerank-enabled: true          # LLM 重排序
+  rerank-min-score: 4           # 重排得分(0-10)低于此的片段丢弃
+  history-window: 6             # 携带最近几条历史消息
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl   # 打印 SQL, 学习用
+
+logging:
+  level:
+    com.smartkb: debug
+    org.springframework.ai: info
